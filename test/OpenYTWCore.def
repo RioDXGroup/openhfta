@@ -1,0 +1,13 @@
+LIBRARY OpenYTWCore
+EXPORTS
+  ATN4=atn4_
+  ANGIN=angin_
+  ANGHORIZ=anghoriz_
+  YUTD=yutd_
+  WD=wd_
+  FFCT=ffct_
+  FRESNEL=fresnel_
+  DIFFDIFF=diffdiff_
+  DRD=drd_
+  YTWCore1=ytwcore1_
+  REFL=refl_

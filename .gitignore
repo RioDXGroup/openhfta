@@ -1,0 +1,38 @@
+# Build artifacts
+build/
+*.o
+*.a
+*.so
+
+# Windows binaries
+*.dll
+*.DLL
+*.dll.*
+*.DLL.*
+*.exe
+*.EXE
+
+# Python artifacts
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Test input files at root (store them in test/ if you wish to commit them)
+/*.PRN
+/*.PRO
+
+# Test output files
+test_*.png
+test_*.txt
+*.png
+
+# Editor/OS noise
+.DS_Store
+*.swp
+*.swo
+
+# clangd / tooling
+compile_commands.json
+.cache/
