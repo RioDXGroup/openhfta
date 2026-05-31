@@ -100,6 +100,24 @@ the original HFTA behavior.
    ./hfta.py --help
    ```
 
+### Option 3: Using nix:
+
+#### Use through shell
+  Use `nix shell` to get a shell with openhfta available:
+  ```
+  nix shell github:riodxgroup/openhfta
+  hfta --help
+  ```
+
+#### Local development
+  You may use a `nix develop` shell to do local development, for example:
+  ```bash
+  nix develop -c $SHELL
+
+  make
+  ./hfta.py --help
+  ```
+
 ## Usage
 
 The examples below assume `hfta` is installed or available in the active shell.
