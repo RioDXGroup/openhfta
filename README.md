@@ -100,6 +100,44 @@ the original HFTA behavior.
    ./hfta.py --help
    ```
 
+### Option 3: Using nix:
+
+#### Use through shell
+  Use `nix shell` to get a shell with openhfta available:
+  ```
+  nix shell github:riodxgroup/openhfta
+  hfta --help
+  ```
+
+#### Local development
+  You may use a `nix develop` shell to do local development, for example:
+  ```bash
+  nix develop -c $SHELL
+
+  make
+  ./hfta.py --help
+  ```
+
+#### Adding to another flake
+  If you want to use this in your NixOS/home-manager config, or as a dependency in another nix project, just add the flake to your inputs:
+  ```nix
+  {
+    inputs = {
+      # ...
+      openhfta.url = "github:riodxgroup/openhfta";
+      openhfta.inputs.nixpkgs.follows = "nixpkgs"; # Optional, remove if you prefer to use this repo's locked nixpkgs version
+    };
+  }
+  ```
+
+  For example, to add to your NixOS config through an overlay:
+  ```nix
+  {inputs, pkgs, ...}: {
+    nixpkgs.overlays = [inputs.openhfta.overlays.default];
+    environment.systemPackages = [pkgs.openhfta];
+  }
+  ```
+
 ## Usage
 
 The examples below assume `hfta` is installed or available in the active shell.
