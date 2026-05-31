@@ -7,8 +7,11 @@
   outputs = {nixpkgs, systems, ...}: let
     forEachSystem = nixpkgs.lib.genAttrs (import systems);
   in {
-    packages = forEachSystem (system: {
-      default = nixpkgs.legacyPackages.${system}.callPackage ./default.nix {};
+    packages = forEachSystem (system: rec {
+      openhfta = nixpkgs.legacyPackages.${system}.callPackage ./default.nix {};
+      default = openhfta;
+
+      openhfta-with-difftests = openhfta.override { withDiffTests = true; };
     });
     overlays.default = final: _prev: {
       openhfta = final.callPackage ./default.nix {};
