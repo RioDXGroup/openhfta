@@ -2,7 +2,7 @@
 #include <stdint.h>
 #include <windows.h>
 
-// Convenções (pode sobrepor via -D)
+// Calling conventions (can be overridden with -D)
 #ifndef CALLCONV_ORIG
 #define CALLCONV_ORIG __stdcall
 #endif
@@ -10,7 +10,7 @@
 #define CALLCONV_NEW  __cdecl
 #endif
 
-// VAs do disassembly da DLL original
+// VAs from the original DLL disassembly
 enum {
     VA_DIFFDIFF  = 0x10001000,
     VA_YUTD      = 0x10002697,
@@ -25,7 +25,7 @@ enum {
     VA_REFL      = 0x1000F192
 };
 
-// Utilitário: obtém ImageBase preferido (para VA->RVA sob ASLR)
+// Helper: gets the preferred ImageBase (for VA->RVA under ASLR)
 static inline uintptr_t get_preferred_image_base(HMODULE hmod) {
     uint8_t* base = (uint8_t*)hmod;
     IMAGE_DOS_HEADER* dos = (IMAGE_DOS_HEADER*)base;
@@ -35,7 +35,7 @@ static inline uintptr_t get_preferred_image_base(HMODULE hmod) {
     return (uintptr_t)nt->OptionalHeader.ImageBase;
 }
 
-// Converte VA do disassembly em ponteiro chamável em runtime
+// Converts a disassembly VA into a callable pointer at runtime
 static inline void* get_fn_by_disasm_va(HMODULE hmod, uintptr_t disasm_va) {
     uintptr_t preferred = get_preferred_image_base(hmod);
     if (!preferred) return NULL;
