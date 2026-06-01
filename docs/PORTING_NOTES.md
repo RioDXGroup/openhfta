@@ -6,6 +6,12 @@ The effort moved the core Fortran numerical routines from their legacy environme
 
 The process revealed that the legacy HFTA code is highly sensitive to the specifics of the compiler and floating-point environment. Achieving a near-perfect match required a deep understanding of not just the physics algorithms, but also the behavior of the compilers themselves.
 
+### CI Reproducibility
+
+OpenHFTA's CI uses the Nix build as the primary compatibility gate. The purpose of CI is not broad Linux distribution coverage; it is to prove that the current implementation still matches the legacy HFTA/YTW numerical behavior under a known toolchain. Running the complete differential suite in Nix pins the relevant compiler, Wine, MinGW runtime, and Python dependency versions through `flake.lock`, making future numerical regressions easier to reproduce and bisect.
+
+Distribution-provided toolchains are still useful for ad hoc portability checks, but they add external release and packaging variables that are not central to the compatibility claim. If a compiler or runtime update changes the numerical behavior, the Nix environment gives that change an explicit repository-level audit trail.
+
 ### 1. Key Numerical Instabilities and Sensitive Algorithms
 
 The core of the software implements the Uniform Theory of Diffraction (UTD). While robust in theory, its implementation contains several points of extreme numerical sensitivity.

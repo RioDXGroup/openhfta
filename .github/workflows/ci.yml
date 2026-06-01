@@ -14,6 +14,8 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # The primary CI signal is numerical compatibility with the legacy HFTA core.
+  # Nix pins the compiler, Wine, runtime, and Python dependencies via flake.lock.
   test-nix:
     name: Build and Test (Nix)
     runs-on: ubuntu-latest
@@ -49,52 +51,3 @@ jobs:
         run: |
           nix-store --add-fixed sha256 private-testdata/{YTWCore.dll,DFORRT.DLL}
           nix build -L .#difftests
-  test:
-    name: Build and Test (Arch Linux + Wine)
-    runs-on: ubuntu-latest
-    container:
-      image: archlinux:latest
-    timeout-minutes: 60
-    env:
-      HAVE_HFTA_TESTDATA_SSH_KEY: ${{ secrets.HFTA_TESTDATA_SSH_KEY != '' }}
-    steps:
-      - name: Install dependencies
-        run: |
-          pacman -Syu --noconfirm
-          pacman -S --noconfirm base-devel git openssh gcc-fortran mingw-w64-gcc wine python-matplotlib
-      - name: Checkout
-        uses: actions/checkout@v6
-      - name: Checkout private legacy test data
-        if: ${{ env.HAVE_HFTA_TESTDATA_SSH_KEY == 'true' }}
-        uses: actions/checkout@v6
-        with:
-          repository: RioDXGroup/openhfta-private-testdata
-          ssh-key: ${{ secrets.HFTA_TESTDATA_SSH_KEY }}
-          path: private-testdata
-          persist-credentials: false
-      - name: Install private legacy test data
-        if: ${{ env.HAVE_HFTA_TESTDATA_SSH_KEY == 'true' }}
-        run: |
-          cp private-testdata/YTWCore.dll test/YTWCore.dll
-          cp private-testdata/DFORRT.DLL test/DFORRT.DLL
-          sha256sum -c <<'EOF'
-          df5e465899bc34928bd90498d5f9b2f8347904fcdd66e3c054f204cc41a1c842  test/YTWCore.dll
-          6a1d32e22fe30957d907bd7e72ce14313077a264de1ce265b71bb1ecda581f77  test/DFORRT.DLL
-          EOF
-      - name: Note missing private legacy test data
-        if: ${{ env.HAVE_HFTA_TESTDATA_SSH_KEY != 'true' }}
-        run: |
-          echo "HFTA_TESTDATA_SSH_KEY is not configured; legacy DLL differential tests will be skipped."
-      - name: Prepare Wine prefix
-        run: |
-          export WINEPREFIX=/tmp/wine-prefix
-          mkdir -p $WINEPREFIX
-          sudo chown -R $(id -u):$(id -g) $WINEPREFIX
-      - name: Build native .so
-        run: |
-          make
-      - name: Run differential tests (Wine)
-        env:
-          WINEPREFIX: /tmp/wine-prefix
-        run: |
-          make test
