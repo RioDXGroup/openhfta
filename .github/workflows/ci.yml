@@ -21,9 +21,9 @@ jobs:
     env:
       HAVE_HFTA_TESTDATA_SSH_KEY: ${{ secrets.HFTA_TESTDATA_SSH_KEY != '' }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: nixbuild/nix-quick-install-action@v30
-      - uses: nix-community/cache-nix-action@v6
+      - uses: nix-community/cache-nix-action@v7
         with:
           primary-key: openhfta
       - uses: cachix/cachix-action@v17
@@ -34,7 +34,7 @@ jobs:
         run: nix build -L .#openhfta
       - name: fetch private testdata
         if: ${{ env.HAVE_HFTA_TESTDATA_SSH_KEY == 'true' }}
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: RioDXGroup/openhfta-private-testdata
           ssh-key: ${{ secrets.HFTA_TESTDATA_SSH_KEY }}
@@ -63,10 +63,10 @@ jobs:
           pacman -Syu --noconfirm
           pacman -S --noconfirm base-devel git openssh gcc-fortran mingw-w64-gcc wine python-matplotlib
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
       - name: Checkout private legacy test data
         if: ${{ env.HAVE_HFTA_TESTDATA_SSH_KEY == 'true' }}
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: RioDXGroup/openhfta-private-testdata
           ssh-key: ${{ secrets.HFTA_TESTDATA_SSH_KEY }}
