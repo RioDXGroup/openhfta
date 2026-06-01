@@ -14,6 +14,41 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  test-nix:
+    name: Build and Test (Nix)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      HAVE_HFTA_TESTDATA_SSH_KEY: ${{ secrets.HFTA_TESTDATA_SSH_KEY != '' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: nixbuild/nix-quick-install-action@v30
+      - uses: nix-community/cache-nix-action@v6
+        with:
+          primary-key: openhfta
+      - uses: cachix/cachix-action@v17
+        with:
+          name: riodxgroup
+          authToken: "${{ secrets.CACHIX_KEY }}"
+      - name: build
+        run: nix build -L .#openhfta
+      - name: fetch private testdata
+        if: ${{ env.HAVE_HFTA_TESTDATA_SSH_KEY == 'true' }}
+        uses: actions/checkout@v4
+        with:
+          repository: RioDXGroup/openhfta-private-testdata
+          ssh-key: ${{ secrets.HFTA_TESTDATA_SSH_KEY }}
+          path: private-testdata
+          persist-credentials: false
+      - name: note missing private testdata
+        if: ${{ env.HAVE_HFTA_TESTDATA_SSH_KEY != 'true' }}
+        run: |
+          echo "HFTA_TESTDATA_SSH_KEY is not configured; legacy DLL differential tests will be skipped."
+      - name: run differential tests
+        if: ${{ env.HAVE_HFTA_TESTDATA_SSH_KEY == 'true' }}
+        run: |
+          nix-store --add-fixed sha256 private-testdata/{YTWCore.dll,DFORRT.DLL}
+          nix build -L .#difftests
   test:
     name: Build and Test (Arch Linux + Wine)
     runs-on: ubuntu-latest
