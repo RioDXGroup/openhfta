@@ -32,7 +32,7 @@ Important scope notes:
 
 ## 1. Wave Basics and Notation
 
-- Speed of light: $c \approx 3\times10^8\,\rm m/s$.
+- Speed of light: $c \approx 3\times10^8$ m/s.
 - Wavelength: $\lambda = c/f$. In feet, for $f$ in MHz, $\lambda_{\rm ft} \approx 984/f_{\rm MHz}$. The main ray and phase calculations use `LAMBDA_FT = 983.5712/f_MHz`; `YUTD` also contains `983.84998/f_MHz` inside a normalization factor that algebraically cancels to $1/\sqrt{L_{\rm waves}}$ for a fixed positive caller-supplied distance parameter.
 - Wavenumber: $k = 2\pi/\lambda$.
 - For a spherical wave in free space:
@@ -66,7 +66,7 @@ Real soil is modeled as a lossy dielectric half-space with complex relative perm
 
 $$\varepsilon_c = \varepsilon_r' - j\frac{\sigma}{\omega\varepsilon_0},\qquad \omega=2\pi f,$$
 
-where $\varepsilon_r'$ is the real relative permittivity, $\sigma$ is conductivity in S/m, and $\varepsilon_0 \approx 8.854\times10^{-12}\,\rm F/m$.
+where $\varepsilon_r'$ is the real relative permittivity, $\sigma$ is conductivity in S/m, and $\varepsilon_0 \approx 8.854\times10^{-12}$ F/m.
 
 For incidence from air onto lossy ground, with $\theta_i$ measured from the local surface normal:
 
@@ -125,18 +125,27 @@ This GTD coefficient is useful away from shadow and reflection boundaries. At a 
 
 Kouyoumjian and Pathak's UTD replaces the singular GTD coefficient with a uniform coefficient valid in the transition regions next to shadow and reflection boundaries. For a straight perfectly conducting wedge, their Eq. (25) is a four-term cotangent expression in which the same distance parameter $L$ appears in all four transition-function arguments:
 
-$$\begin{aligned}
-D_{s,h} &=
+$$D_{s,h} =
 \frac{-e^{-j\pi/4}}{2n\sqrt{2\pi k}\sin\beta_0}
-\bigg[
-\cot\left(\frac{\pi+(\phi^d-\phi^i)}{2n}\right)F(kL a^+(\phi^d-\phi^i))
-+ \cot\left(\frac{\pi-(\phi^d-\phi^i)}{2n}\right)F(kL a^-(\phi^d-\phi^i))\\
-&\qquad\mp
-\cot\left(\frac{\pi+(\phi^d+\phi^i)}{2n}\right)F(kL a^+(\phi^d+\phi^i))
-\mp
-\cot\left(\frac{\pi-(\phi^d+\phi^i)}{2n}\right)F(kL a^-(\phi^d+\phi^i))
-\bigg].
-\end{aligned}$$
+\left[T_1 + T_2 \mp T_3 \mp T_4\right].$$
+
+with
+
+$$T_1 =
+\cot\left(\frac{\pi+(\phi^d-\phi^i)}{2n}\right)
+F(kL a^+(\phi^d-\phi^i)),$$
+
+$$T_2 =
+\cot\left(\frac{\pi-(\phi^d-\phi^i)}{2n}\right)
+F(kL a^-(\phi^d-\phi^i)),$$
+
+$$T_3 =
+\cot\left(\frac{\pi+(\phi^d+\phi^i)}{2n}\right)
+F(kL a^+(\phi^d+\phi^i)),$$
+
+$$T_4 =
+\cot\left(\frac{\pi-(\phi^d+\phi^i)}{2n}\right)
+F(kL a^-(\phi^d+\phi^i)).$$
 
 The code follows this four-term structure with its own terrain-angle tuple. `WD` first sets `psi_work = PHR - PhiP`, evaluates the two parity cases corresponding to cotangent arguments $(\pi+\psi)/(2n)$ and $(\pi-\psi)/(2n)$, then repeats the same two parity cases with `psi_work = PHR + PhiP`. Thus the first pair maps to the $\phi^d-\phi^i$ angular family and the second pair maps to the $\phi^d+\phi^i$ angular family. `YUTD` then combines the four returned terms as `(term1 + term2) - (term3 + term4)`. The routine carries this one scalar combination into the horizontal terrain calculation instead of carrying separate soft and hard coefficients. All four terms receive one scalar distance parameter from the caller.
 
@@ -150,7 +159,9 @@ where $N^\pm$ is the integer that selects the nearest relevant shadow or reflect
 
 The transition function is
 
-$$F(X)=2j\sqrt{X}\,e^{jX}\int_{\sqrt{X}}^\infty e^{-j\tau^2}\,d\tau.$$
+$$
+F(X)=2j\sqrt{X}e^{jX}\int_{\sqrt{X}}^{\infty} e^{-j\tau^2}d\tau.
+$$
 
 It has the limiting behavior:
 
@@ -451,7 +462,9 @@ $$v=h\sqrt{\frac{2(d_1+d_2)}{\lambda d_1d_2}},$$
 
 where $h$ is obstacle height above the straight source-receiver line and $d_1,d_2$ are the source-edge and edge-receiver distances. In one common normalized representation, the field behind the edge is written with a Fresnel integral over a lower limit set by $v$:
 
-$$\frac{E}{E_0}=\frac{1+j}{2}\int_v^\infty e^{-j\pi t^2/2}\,dt.$$
+$$
+\frac{E}{E_0}=\frac{1+j}{2}\int_v^{\infty} e^{-j\pi t^2/2}dt.
+$$
 
 The formula says that the edge contribution depends on how many Fresnel zones are blocked. Near $v=0$, the obstruction clips the wavefront near the line of sight and produces the familiar roughly 6 dB transition value. As $v$ grows positive, more of the wavefront is blocked and the field falls. This knife-edge model is simpler than terrain UTD, but it gives the right intuition: the shadow boundary is a finite transition region, and phase matters.
 
@@ -459,13 +472,13 @@ The formula says that the edge contribution depends on how many Fresnel zones ar
 
 Keller's GTD replaces a real obstacle near a point by a canonical local object, such as a perfectly conducting wedge. The diffracted field is written as the incident field at the edge times a local diffraction coefficient times a spreading and phase factor:
 
-$$\tilde E_d \sim \tilde E_i(Q_E)\,D(\phi^d,\phi^i,n)\,S(s^d)\,e^{-jks^d}.$$
+$$\tilde E_d \sim \tilde E_i(Q_E)D(\phi^d,\phi^i,n)S(s^d)e^{-jks^d}.$$
 
 For a straight wedge, the scalar GTD coefficient contains denominators that become singular at shadow and reflection boundaries. The singularity is a signal that the local asymptotic expression and the discontinuous GO field have to be combined uniformly in that boundary region.
 
 Kouyoumjian-Pathak UTD keeps the same local wedge idea but replaces each singular boundary term by
 
-$$\cot(\cdots)\,F(kLa^\pm),$$
+$$\cot(\cdots)F(kLa^\pm),$$
 
 where:
 
