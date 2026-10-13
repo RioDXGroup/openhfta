@@ -1,3 +1,109 @@
+subroutine TRACE_RESET()
+    implicit none
+    integer*4 TraceCount, TraceActive, TraceActiveIndex, I, J
+    integer*2 TraceKind(1:4096), TraceNPoints(1:4096)
+    real*4 TraceAngle(1:4096), TraceX(1:4096,1:151), TraceY(1:4096,1:151)
+    common /TraceData/ TraceCount, TraceActive, TraceActiveIndex, TraceKind, TraceNPoints, TraceAngle, TraceX, TraceY
+    TraceCount = 0
+    TraceActive = 0
+    TraceActiveIndex = 0
+    do I = 1, 4096
+        TraceKind(I) = 0
+        TraceNPoints(I) = 0
+        TraceAngle(I) = 0.0
+        do J = 1, 151
+            TraceX(I,J) = 0.0
+            TraceY(I,J) = 0.0
+        end do
+    end do
+end subroutine TRACE_RESET
+
+subroutine TRACE_START(KindIn, AngleIn, XIn, YIn)
+    implicit none
+    integer*2 KindIn
+    real*4 AngleIn, XIn, YIn
+    integer*4 TraceCount, TraceActive, TraceActiveIndex
+    integer*2 TraceKind(1:4096), TraceNPoints(1:4096)
+    real*4 TraceAngle(1:4096), TraceX(1:4096,1:151), TraceY(1:4096,1:151)
+    common /TraceData/ TraceCount, TraceActive, TraceActiveIndex, TraceKind, TraceNPoints, TraceAngle, TraceX, TraceY
+    TraceActive = 0
+    if (TraceCount >= 4096) return
+    ! Two-edge diffraction can generate thousands of accepted visual paths.
+    ! Reserve room for the direct/reflected sweep that runs afterward.
+    if (KindIn == 8 .and. TraceCount >= 2400) return
+    TraceCount = TraceCount + 1
+    TraceActiveIndex = TraceCount
+    TraceKind(TraceCount) = KindIn
+    TraceNPoints(TraceCount) = 1
+    TraceAngle(TraceCount) = AngleIn
+    TraceX(TraceCount,1) = XIn
+    TraceY(TraceCount,1) = YIn
+    TraceActive = 1
+end subroutine TRACE_START
+
+subroutine TRACE_ADD_KIND(KindIn)
+    implicit none
+    integer*2 KindIn
+    integer*4 TraceCount, TraceActive, TraceActiveIndex
+    integer*2 TraceKind(1:4096), TraceNPoints(1:4096)
+    real*4 TraceAngle(1:4096), TraceX(1:4096,1:151), TraceY(1:4096,1:151)
+    common /TraceData/ TraceCount, TraceActive, TraceActiveIndex, TraceKind, TraceNPoints, TraceAngle, TraceX, TraceY
+    if (TraceActive == 1 .and. TraceActiveIndex > 0) then
+        TraceKind(TraceActiveIndex) = IOR(TraceKind(TraceActiveIndex), KindIn)
+    end if
+end subroutine TRACE_ADD_KIND
+
+subroutine TRACE_ADD(XIn, YIn)
+    implicit none
+    real*4 XIn, YIn
+    integer*4 TraceCount, TraceActive, TraceActiveIndex
+    integer*2 TraceKind(1:4096), TraceNPoints(1:4096)
+    real*4 TraceAngle(1:4096), TraceX(1:4096,1:151), TraceY(1:4096,1:151)
+    common /TraceData/ TraceCount, TraceActive, TraceActiveIndex, TraceKind, TraceNPoints, TraceAngle, TraceX, TraceY
+    if (TraceActive == 1 .and. TraceActiveIndex > 0) then
+        if (TraceNPoints(TraceActiveIndex) < 151) then
+            TraceNPoints(TraceActiveIndex) = TraceNPoints(TraceActiveIndex) + 1
+            TraceX(TraceActiveIndex,TraceNPoints(TraceActiveIndex)) = XIn
+            TraceY(TraceActiveIndex,TraceNPoints(TraceActiveIndex)) = YIn
+        end if
+    end if
+end subroutine TRACE_ADD
+
+subroutine TRACE_SET_KIND(KindIn)
+    implicit none
+    integer*2 KindIn
+    integer*4 TraceCount, TraceActive, TraceActiveIndex
+    integer*2 TraceKind(1:4096), TraceNPoints(1:4096)
+    real*4 TraceAngle(1:4096), TraceX(1:4096,1:151), TraceY(1:4096,1:151)
+    common /TraceData/ TraceCount, TraceActive, TraceActiveIndex, TraceKind, TraceNPoints, TraceAngle, TraceX, TraceY
+    if (TraceActive == 1 .and. TraceActiveIndex > 0) TraceKind(TraceActiveIndex) = KindIn
+end subroutine TRACE_SET_KIND
+
+subroutine TRACE_SET_ANGLE(AngleIn)
+    implicit none
+    real*4 AngleIn
+    integer*4 TraceCount, TraceActive, TraceActiveIndex
+    integer*2 TraceKind(1:4096), TraceNPoints(1:4096)
+    real*4 TraceAngle(1:4096), TraceX(1:4096,1:151), TraceY(1:4096,1:151)
+    common /TraceData/ TraceCount, TraceActive, TraceActiveIndex, TraceKind, TraceNPoints, TraceAngle, TraceX, TraceY
+    if (TraceActive == 1 .and. TraceActiveIndex > 0) TraceAngle(TraceActiveIndex) = AngleIn
+end subroutine TRACE_SET_ANGLE
+
+subroutine TRACE_FINISH()
+    implicit none
+    integer*4 TraceCount, TraceActive, TraceActiveIndex
+    integer*2 TraceKind(1:4096), TraceNPoints(1:4096)
+    real*4 TraceAngle(1:4096), TraceX(1:4096,1:151), TraceY(1:4096,1:151)
+    common /TraceData/ TraceCount, TraceActive, TraceActiveIndex, TraceKind, TraceNPoints, TraceAngle, TraceX, TraceY
+    if (TraceActive == 1) then
+        if (TraceActiveIndex > 0) then
+            if (TraceKind(TraceActiveIndex) == 0) TraceKind(TraceActiveIndex) = 1
+        end if
+    end if
+    TraceActive = 0
+    TraceActiveIndex = 0
+end subroutine TRACE_FINISH
+
 ! ================================================================================
 ! DIFFDIFF: Two-Edge Diffraction Analysis Using Cascaded Scalar UTD Terms
 ! ================================================================================
@@ -28,11 +134,12 @@
 !   E_diffAccum    - Complex elevation pattern array (accumulated diffraction contributions)
 !
 ! ================================================================================
-subroutine DIFFDIFF ( NPoints, NDiffPoints, NElements, DebugEnable, DebugMode, DebugExitAngle, AntPhase, E_diffAccum )  !3
+subroutine DIFFDIFF ( NPoints, NDiffPoints, NElements, DebugEnable, DebugMode, DebugExitAngle, AntPhase, HantFeetAbs, E_diffAccum )  !3
     implicit none
     integer*4 NPoints, NDiffPoints, NElements, DebugEnable, DebugMode
     real*4 DebugExitAngle
     integer*2 AntPhase(*)
+    real*4 HantFeetAbs(*)
     complex*8 E_diffAccum(0:181)
 
     real*4 FinalPhase2, AngleIdx_f2, OutputField2, UnusedTotSlant2, AngleOut2
@@ -51,7 +158,8 @@ subroutine DIFFDIFF ( NPoints, NDiffPoints, NElements, DebugEnable, DebugMode, D
     common /Globals/ DiffPtIdx, EdgePairUsed, NCountDiff, TotalDiffCount, DiffPh0, FAngle
 
     real*4 DG(0:150), HG(0:150), FREQ_MHZ, SOIL_EPSR, SOIL_COND_PARAM, k, LAMBDA_FT, PATTERN_ELEV_NORM60_OVER_BW, ARRAY_PATTERN_SCALE
-    common /Params/ DG, HG, FREQ_MHZ, SOIL_EPSR, SOIL_COND_PARAM, k, LAMBDA_FT, PATTERN_ELEV_NORM60_OVER_BW, ARRAY_PATTERN_SCALE
+    integer*2 POLARIZATION_MODE
+    common /Params/ DG, HG, FREQ_MHZ, SOIL_EPSR, SOIL_COND_PARAM, k, LAMBDA_FT, PATTERN_ELEV_NORM60_OVER_BW, ARRAY_PATTERN_SCALE, POLARIZATION_MODE
 
     real*4 PI, TWO_PI, UTD_MAG_THRESHOLD, DEG2RAD, HALF_PI, EARTH_RADIUS_FT
     common /Constants/ PI, TWO_PI, UTD_MAG_THRESHOLD, DEG2RAD, HALF_PI, EARTH_RADIUS_FT
@@ -177,6 +285,19 @@ subroutine DIFFDIFF ( NPoints, NDiffPoints, NElements, DebugEnable, DebugMode, D
                                           AngleOut2, UnusedTotSlant2, MadeItOut, MadeHit)
                                 OutputField2 = ReflAmpTrace * AmpAtE2  !151
                                 if (MadeItOut) then  !152
+                                    ! Keep a geometric record of the accepted two-edge path.
+                                    ! The second REFL call is intentionally used only for tracing:
+                                    ! the first call above remains the field calculation.
+                                    if (ElemIdx == 1) then
+                                        CALL TRACE_START(8_I2, AngleOut2 / DEG2RAD, DG(1), HG(1) + HantFeetAbs(ElemIdx))
+                                        CALL TRACE_ADD(DG(DiffPtIdx(EdgeIdx1)), HG(DiffPtIdx(EdgeIdx1)))
+                                        CALL TRACE_ADD(DG(DiffPtIdx(EdgeIdx2)), HG(DiffPtIdx(EdgeIdx2)))
+                                        CALL REFL(E2_i2, NPoints_i2, PHRF2, HG_at_E2, &
+                                                  PhaseAtE2, ReflAmpTrace, ReflPhase2, RayHeightOut2, &
+                                                  AngleOut2, UnusedTotSlant2, MadeItOut, MadeHit)
+                                        CALL TRACE_SET_ANGLE(AngleOut2 / DEG2RAD)
+                                        CALL TRACE_FINISH()
+                                    end if
                                     ! Accepted ray cleared the profile end; calculate elevation contribution
                                     ! Convert elevation angle to pattern array index
                                     ! Maps to 0.25° bins: idx = angle_deg × 4
@@ -266,6 +387,10 @@ subroutine YUTD ( FREQ_MHZ, L_waves, PhiP, Incl, PHR, OutMag, OutPhase )  !207
     real*4 PI, TWO_PI, UTD_MAG_THRESHOLD, DEG2RAD, HALF_PI, EARTH_RADIUS_FT
     common /Constants/ PI, TWO_PI, UTD_MAG_THRESHOLD, DEG2RAD, HALF_PI, EARTH_RADIUS_FT
 
+    real*4 DG(0:150), HG(0:150), FREQ_PARAM, SOIL_EPSR_PARAM, SOIL_COND_PARAM, K_PARAM, LAMBDA_PARAM, PATTERN_PARAM, ARRAY_PARAM
+    integer*2 POLARIZATION_MODE
+    common /Params/ DG, HG, FREQ_PARAM, SOIL_EPSR_PARAM, SOIL_COND_PARAM, K_PARAM, LAMBDA_PARAM, PATTERN_PARAM, ARRAY_PARAM, POLARIZATION_MODE
+
     real*4, external :: ATN4
 
     ! ====================================================================
@@ -286,9 +411,15 @@ subroutine YUTD ( FREQ_MHZ, L_waves, PhiP, Incl, PHR, OutMag, OutPhase )  !207
     L_param = L_waves  !239
     CALL WD(UTD_terms4, L_param, PHR, PhiP, SinBeta0, n_wedge)  !240
 
-    ! Combine the 4 UTD terms from WD calculation
-    ! The signs combine the four angular terms into the diffraction coefficient
-    UTD_sum = (UTD_terms4(1) + UTD_terms4(2)) - (UTD_terms4(3) + UTD_terms4(4))  !243
+    ! Combine the 4 UTD terms from WD calculation.
+    ! In this 2-D wedge convention, horizontal/TE is the soft coefficient
+    ! and vertical/TM is the complementary hard coefficient. The hard
+    ! coefficient changes the sign of the phi_d + phi_i pair.
+    if (POLARIZATION_MODE == 1) then
+        UTD_sum = (UTD_terms4(1) + UTD_terms4(2)) + (UTD_terms4(3) + UTD_terms4(4))  !243v
+    else
+        UTD_sum = (UTD_terms4(1) + UTD_terms4(2)) - (UTD_terms4(3) + UTD_terms4(4))  !243h
+    end if
 
     ! Apply the scalar distance normalization; for positive L the wavelength factors cancel
     UTD_sum = SQRT(LambdaNormFt)*UTD_sum*1.0/SQRT(LambdaNormFt*L_param)  !247
@@ -529,11 +660,12 @@ end function  !378
 ! ================================================================================
 ! FRESNEL: Plane-Wave Ground Reflection Coefficient Calculator
 ! ================================================================================
-! Purpose: Computes the horizontal-polarization Fresnel coefficient for a
+! Purpose: Computes the selected-polarization Fresnel coefficient for a
 !          plane wave reflecting from lossy ground using complex permittivity
 !
-! Theory: Uses the supplied angle in the horizontal Fresnel coefficient form:
+! Theory: Uses elevation angle a and the selected TE/TM Fresnel form:
 !         Gamma_h(a)=(sin a - sqrt(eps_r-cos^2 a))/(sin a + sqrt(...))
+!         Gamma_v(a)=(eps_r*sin a - sqrt(eps_r-cos^2 a))/(eps_r*sin a + sqrt(...))
 !         eps_r = eps' - j*sigma/(omega*eps0) is complex permittivity
 !         ε' = relative permittivity, σ = conductivity [S/m]
 !
@@ -555,7 +687,8 @@ subroutine FRESNEL ( FresnelAngle, AmpIn, PhaseIn, AmpOut, PhaseOut )  !381
     real*4 num_real, phi_over2, sqrt_eps_mag, eps_imag_term, eps_minus_cos2
 
     real*4 DG(0:150), HG(0:150), FREQ_MHZ, SOIL_EPSR, SOIL_COND_PARAM, k, LAMBDA_FT, PATTERN_ELEV_NORM60_OVER_BW, ARRAY_PATTERN_SCALE
-    common /Params/ DG, HG, FREQ_MHZ, SOIL_EPSR, SOIL_COND_PARAM, k, LAMBDA_FT, PATTERN_ELEV_NORM60_OVER_BW, ARRAY_PATTERN_SCALE
+    integer*2 POLARIZATION_MODE
+    common /Params/ DG, HG, FREQ_MHZ, SOIL_EPSR, SOIL_COND_PARAM, k, LAMBDA_FT, PATTERN_ELEV_NORM60_OVER_BW, ARRAY_PATTERN_SCALE, POLARIZATION_MODE
 
     real*4, external :: ATN4
 
@@ -569,12 +702,19 @@ subroutine FRESNEL ( FresnelAngle, AmpIn, PhaseIn, AmpOut, PhaseOut )  !381
     eps_imag_term = -((SOIL_COND_PARAM * 18000.0) / FREQ_MHZ)  !397
     sqrt_eps_mag = SQRT(SQRT(eps_imag_term*eps_imag_term + eps_minus_cos2*eps_minus_cos2))  !398
     phi_over2 = ATN4(eps_minus_cos2, eps_imag_term) / 2.0  !399
-    num_real = SIN(ABS(FresnelAngle)) - COS(phi_over2)*sqrt_eps_mag  !400
-    num_imag = -(SIN(phi_over2)*sqrt_eps_mag)  !401
+    if (POLARIZATION_MODE == 1) then
+        num_real = SOIL_EPSR * SIN(ABS(FresnelAngle)) - COS(phi_over2)*sqrt_eps_mag  !400v
+        num_imag = eps_imag_term * SIN(ABS(FresnelAngle)) - (SIN(phi_over2)*sqrt_eps_mag)  !401v
+        den_real = SOIL_EPSR * SIN(ABS(FresnelAngle)) + COS(phi_over2)*sqrt_eps_mag  !404v
+        den_imag = eps_imag_term * SIN(ABS(FresnelAngle)) + (SIN(phi_over2)*sqrt_eps_mag)  !405v
+    else
+        num_real = SIN(ABS(FresnelAngle)) - COS(phi_over2)*sqrt_eps_mag  !400
+        num_imag = -(SIN(phi_over2)*sqrt_eps_mag)  !401
+        den_real = COS(phi_over2)*sqrt_eps_mag + SIN(ABS(FresnelAngle))  !404
+        den_imag = SIN(phi_over2)*sqrt_eps_mag  !405
+    end if
     num_abs = SQRT(num_imag*num_imag + num_real*num_real)  !402
     num_arg = ATN4(num_real, num_imag)  !403
-    den_real = COS(phi_over2)*sqrt_eps_mag + SIN(ABS(FresnelAngle))  !404
-    den_imag = SIN(phi_over2)*sqrt_eps_mag  !405
     den_abs = SQRT(den_real*den_real + den_imag*den_imag)  !406
     den_arg = ATN4(den_real, den_imag)  !407
     Gamma_mag = num_abs / den_abs  !408
@@ -743,7 +883,8 @@ subroutine DRD ( NPoints, NDiffPoints, NElements, DebugEnable, DebugMode, DebugE
     common /Globals/ DiffPtIdx, EdgePairUsed, NCountDiff, TotalDiffCount, DiffPh0, FAngle
 
     real*4 DG(0:150), HG(0:150), FREQ_MHZ, SOIL_EPSR, SOIL_COND_PARAM, k, LAMBDA_FT, PATTERN_ELEV_NORM60_OVER_BW, ARRAY_PATTERN_SCALE
-    common /Params/ DG, HG, FREQ_MHZ, SOIL_EPSR, SOIL_COND_PARAM, k, LAMBDA_FT, PATTERN_ELEV_NORM60_OVER_BW, ARRAY_PATTERN_SCALE
+    integer*2 POLARIZATION_MODE
+    common /Params/ DG, HG, FREQ_MHZ, SOIL_EPSR, SOIL_COND_PARAM, k, LAMBDA_FT, PATTERN_ELEV_NORM60_OVER_BW, ARRAY_PATTERN_SCALE, POLARIZATION_MODE
 
     real*4 PI, TWO_PI, UTD_MAG_THRESHOLD, DEG2RAD, HALF_PI, EARTH_RADIUS_FT
     common /Constants/ PI, TWO_PI, UTD_MAG_THRESHOLD, DEG2RAD, HALF_PI, EARTH_RADIUS_FT

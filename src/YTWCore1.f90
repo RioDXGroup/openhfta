@@ -34,6 +34,7 @@
 !   DebugEnable_in     - Debug file output enable (1=on, 0=off)
 !   DebugExitAngle_in  - Specific exit angle for detailed debug output [degrees]
 !   AntPhase(0:3)      - Phase settings: 1=0°, -1=180° for each antenna element
+!   Polarization      - 0=horizontal/TE, 1=vertical/TM
 !
 ! Output Parameters:
 !   Pattern_dB(0:139)  - Elevation pattern in dB; 140 points at 0.25° resolution
@@ -43,16 +44,15 @@
 !
 ! Key Physical Constants Used:
 !   LAMBDA_FT = 983.5712/f_MHz [feet], k = 2π/λ [rad/ft], f in MHz
-!   FRESNEL uses ABS(outgoing ray angle) in Gh=(sin a-sqrt(eps-cos^2 a))/(sin a+sqrt(...))
-!   with eps = eps' - j*sigma/(omega*eps0); horizontal-polarization coefficient
+!   FRESNEL uses ABS(outgoing ray angle) with the selected TE/TM coefficient
 !   UTD diffraction uses scalar straight-wedge terms with one L_waves per YUTD call
 !
 ! ================================================================================
-subroutine YTWCore1 (DG0_in, HG0_in, HantFeetIn, FREQ_MHZ_in, SOIL_EPSR_in, SOIL_COND_PARAM_in, AntPatternType, DiffractionDisable, DebugEnable_in, DebugExitAngle_in, Pattern_dB, AntPhase) !1
+subroutine YTWCore1 (DG0_in, HG0_in, HantFeetIn, FREQ_MHZ_in, SOIL_EPSR_in, SOIL_COND_PARAM_in, AntPatternType, Polarization, DiffractionDisable, DebugEnable_in, DebugExitAngle_in, Pattern_dB, AntPhase) !1
 !DEC$ ATTRIBUTES DLLEXPORT::YTWCore1
     implicit none
     real*4 DG0_in(0:150), HG0_in(0:150), HantFeetIn(0:3), FREQ_MHZ_in, SOIL_EPSR_in, SOIL_COND_PARAM_in
-    integer*2 AntPatternType, DiffractionDisable, DebugEnable_in
+    integer*2 AntPatternType, Polarization, DiffractionDisable, DebugEnable_in
     real*4 DebugExitAngle_in, Pattern_dB(0:139)
     integer*2 AntPhase(0:3)
 
@@ -76,7 +76,13 @@ subroutine YTWCore1 (DG0_in, HG0_in, HantFeetIn, FREQ_MHZ_in, SOIL_EPSR_in, SOIL
     common /Globals/ DiffPtIdx, EdgePairUsed, NCountDiff, TotalDiffCount, DiffPh0, FAngle
 
     real*4 DG(0:150), HG(0:150), FREQ_MHZ, SOIL_EPSR, SOIL_COND_PARAM, k, LAMBDA_FT, PATTERN_ELEV_NORM60_OVER_BW, ARRAY_PATTERN_SCALE
-    common /Params/ DG, HG, FREQ_MHZ, SOIL_EPSR, SOIL_COND_PARAM, k, LAMBDA_FT, PATTERN_ELEV_NORM60_OVER_BW, ARRAY_PATTERN_SCALE
+    integer*2 POLARIZATION_MODE
+    common /Params/ DG, HG, FREQ_MHZ, SOIL_EPSR, SOIL_COND_PARAM, k, LAMBDA_FT, PATTERN_ELEV_NORM60_OVER_BW, ARRAY_PATTERN_SCALE, POLARIZATION_MODE
+
+    integer*4 TraceCount, TraceActive, TraceActiveIndex
+    integer*2 TraceKind(1:4096), TraceNPoints(1:4096)
+    real*4 TraceAngle(1:4096), TraceX(1:4096,1:151), TraceY(1:4096,1:151)
+    common /TraceData/ TraceCount, TraceActive, TraceActiveIndex, TraceKind, TraceNPoints, TraceAngle, TraceX, TraceY
 
     real*4 PI, TWO_PI, UTD_MAG_THRESHOLD, DEG2RAD, HALF_PI, EARTH_RADIUS_FT
     common /Constants/ PI, TWO_PI, UTD_MAG_THRESHOLD, DEG2RAD, HALF_PI, EARTH_RADIUS_FT
@@ -150,6 +156,7 @@ subroutine YTWCore1 (DG0_in, HG0_in, HantFeetIn, FREQ_MHZ_in, SOIL_EPSR_in, SOIL
     FREQ_MHZ = FREQ_MHZ_in  !136
     SOIL_EPSR = SOIL_EPSR_in  !137
     SOIL_COND_PARAM = SOIL_COND_PARAM_in  !138
+    POLARIZATION_MODE = Polarization  !138a
 
     ! Antenna pattern parameters based on type selection (HFTA GUI mapping)
     ! Sets element elevation beamwidth (PatternBeamwidthDeg) and an
@@ -208,6 +215,7 @@ subroutine YTWCore1 (DG0_in, HG0_in, HantFeetIn, FREQ_MHZ_in, SOIL_EPSR_in, SOIL
     ! Main ray tracing, single-edge diffraction, and DIFFDIFF run with value 1
     ! The later DRD branch requires ProcessFlag == 0
     ProcessFlag = 1  !185
+    CALL TRACE_RESET()
 
     if (DebugEnable == 1) then  !187
         ! Open debug output files for detailed ray tracing analysis
@@ -259,7 +267,10 @@ subroutine YTWCore1 (DG0_in, HG0_in, HantFeetIn, FREQ_MHZ_in, SOIL_EPSR_in, SOIL
         DG0_in(ScanIdx) = 100000.0  !246
         HG0_in(LastPointIdx) = HG0_in(LastPointIdx - 1)  !249
     end if
-    do M = 2, LastPointIdx + 1  !251
+    ! LastPointIdx is the final valid input/endpoint index. The previous
+    ! upper bound evaluated one element past the 0:150 ABI array when the
+    ! profile occupied the maximum supported number of points.
+    do M = 2, LastPointIdx  !251
         ! Calculate adjacent raw slopes for the terrain-reduction pass
         ! In this thinning loop they are computed but not used by the test
         ! below, which depends only on height change from the last kept point.
@@ -461,9 +472,17 @@ subroutine YTWCore1 (DG0_in, HG0_in, HantFeetIn, FREQ_MHZ_in, SOIL_EPSR_in, SOIL
                                     ! Call REFL to trace the outgoing ray and apply Fresnel if it reflects
                                     M_i2 = INT(M, KIND=I2)  !453
                                     NPointsSmoothed_i2 = INT(NPointsSmoothed, KIND=I2)  !454
+                                    if (ElemIdx == 1) then
+                                        CALL TRACE_START(4_I2, PHRF / DEG2RAD, DG(1), HG(1) + HantFeetAbs(ElemIdx))
+                                        CALL TRACE_ADD(DG(M), HG(M))
+                                    end if
                                     CALL REFL(M_i2, NPointsSmoothed_i2, PHRF, HG_at_M, &  !455
                                               PhaseWork, ReflAmp, ReflPhase, HtRay, PHRout, &
                                               TotSlantFt, MadeItOut, MadeHit)
+                                    if (ElemIdx == 1) then
+                                        CALL TRACE_SET_ANGLE(PHRout / DEG2RAD)
+                                        CALL TRACE_FINISH()
+                                    end if
                                     OutputField = ReflAmp * OutputField  !458
                                     if (MadeItOut) then  !459
                                         ! ================================================
@@ -560,7 +579,7 @@ subroutine YTWCore1 (DG0_in, HG0_in, HantFeetIn, FREQ_MHZ_in, SOIL_EPSR_in, SOIL
         ! DIFFDIFF: evaluates two-edge diffraction with cascaded UTD terms
         ! Two-edge paths: Antenna -> Edge1 -> Edge2 -> profile end
         CALL DIFFDIFF(NPointsSmoothed, NDiffPoints_i4, NElements, DebugEnable, DebugMode, &  !547
-                      DebugExitAngle, AntPhase, E_diffAccum)
+                      DebugExitAngle, AntPhase, HantFeetAbs, E_diffAccum)
         ! DRD: diffraction-reflection-diffraction branch
         ! ProcessFlag gates this branch
         if (ProcessFlag == 0) then  !552
@@ -595,6 +614,9 @@ subroutine YTWCore1 (DG0_in, HG0_in, HantFeetIn, FREQ_MHZ_in, SOIL_EPSR_in, SOIL
         Loop_LaunchAngleScan: do LaunchIdxQ = -220, 140  !585
             AngleOutRad = (LaunchIdxQ * DEG2RAD) / 4.0  !591
             RayHeightCurrent = HG(1) + HantFeetAbs(ElemIdx)  !594
+            if (ElemIdx == 1) then
+                CALL TRACE_START(0_I2, REAL(LaunchIdxQ) / 4.0, DG(1), RayHeightCurrent)
+            end if
             ElemPatternAmp(ElemIdx, LaunchIdxQ) = COS(AngleOutRad * PATTERN_ELEV_NORM60_OVER_BW) * ARRAY_PATTERN_SCALE  !599
             if (AntPhase(ElemIdx - 1) == 1) then  !600
                 ElemPhase(ElemIdx, LaunchIdxQ) = 0.0  !601
@@ -616,6 +638,7 @@ subroutine YTWCore1 (DG0_in, HG0_in, HantFeetIn, FREQ_MHZ_in, SOIL_EPSR_in, SOIL
                     SlantSegFt(LaunchIdxQ) = (DG(M) - DG(M-1)) / COS(AngleOutRad)  !618
                     ElemPhase(ElemIdx, LaunchIdxQ) = ElemPhase(ElemIdx, LaunchIdxQ) &  !619
                                                                + k * SlantSegFt(LaunchIdxQ)  !620
+                    if (ElemIdx == 1) CALL TRACE_ADD(DG(M), RayHeightAtAngle(LaunchIdxQ))
                 else
                     ! ====================================================
                     ! RAY HITS TERRAIN - COMPUTE REFLECTION POINT
@@ -633,6 +656,10 @@ subroutine YTWCore1 (DG0_in, HG0_in, HantFeetIn, FREQ_MHZ_in, SOIL_EPSR_in, SOIL
                     ReflectPointDistFt = ReflectOffset + DG(M-1)  !636
                     ! Height at reflection point
                     ReflectPointHeightFt = SegmentSlope * ReflectOffset + HG(M-1)  !638
+                    if (ElemIdx == 1) then
+                        CALL TRACE_ADD_KIND(2_I2)
+                        CALL TRACE_ADD(ReflectPointDistFt, ReflectPointHeightFt)
+                    end if
                     SegmentAngleRad = ATN4(DG(M) - DG(M-1), HG(M) - HG(M-1))  !639
                     ! Apply the specular reflection law: theta_reflected = 2*terrain_angle - theta_incident
                     AngleOutRad = SegmentAngleRad * 2.0 - AngleOutRad  !641
@@ -647,6 +674,7 @@ subroutine YTWCore1 (DG0_in, HG0_in, HantFeetIn, FREQ_MHZ_in, SOIL_EPSR_in, SOIL
                     SlantSegFt(LaunchIdxQ) = (DG(M) - DG(M-1) - ReflectOffset) / COS(AngleOutRad)  !650
                     ! Update ray height after reflection using reflected angle
                     RayHeightAtAngle(LaunchIdxQ) = (SIN(AngleOutRad) * SlantSegFt(LaunchIdxQ) + ReflectPointHeightFt)  !652
+                    if (ElemIdx == 1) CALL TRACE_ADD(DG(M), RayHeightAtAngle(LaunchIdxQ))
                     PhaseWork = k * SlantSegFt(LaunchIdxQ) + ElemPhase(ElemIdx, LaunchIdxQ)  !653
                     ! Evaluate Fresnel at outgoing elevation; apply phase and save magnitude for RD
                     ElemPatternAmp_curr = ElemPatternAmp(ElemIdx, LaunchIdxQ)  !655
@@ -914,6 +942,11 @@ subroutine YTWCore1 (DG0_in, HG0_in, HantFeetIn, FREQ_MHZ_in, SOIL_EPSR_in, SOIL
                         ! Continue with the next launch angle
                         ! Any accepted RD phasors were already accumulated above
                         ElemPatternAmp(ElemIdx, LaunchIdxQ) = 0.0  !913
+                        if (ElemIdx == 1) then
+                            CALL TRACE_ADD_KIND(4_I2)
+                            CALL TRACE_SET_ANGLE(AngleOutRad_RD / DEG2RAD)
+                            CALL TRACE_FINISH()
+                        end if
                         CYCLE Loop_LaunchAngleScan  !914
                     end if
                 end if
@@ -973,6 +1006,10 @@ subroutine YTWCore1 (DG0_in, HG0_in, HantFeetIn, FREQ_MHZ_in, SOIL_EPSR_in, SOIL
                             FinalPhaseGO
                     end if
                 end if
+            end if
+            if (ElemIdx == 1) then
+                CALL TRACE_SET_ANGLE(AngleOutRad / DEG2RAD)
+                CALL TRACE_FINISH()
             end if
         end do Loop_LaunchAngleScan
     end do
@@ -1060,6 +1097,30 @@ subroutine YTWCore1 (DG0_in, HG0_in, HantFeetIn, FREQ_MHZ_in, SOIL_EPSR_in, SOIL
 end subroutine  !1061
 
 
+subroutine YTWCore1_GetTrace(CountOut, KindOut, NPointsOut, AngleOut, XOut, YOut)
+    implicit none
+    integer*4 CountOut
+    integer*2 KindOut(0:4095), NPointsOut(0:4095)
+    real*4 AngleOut(0:4095), XOut(0:4095,0:150), YOut(0:4095,0:150)
+    integer*4 TraceCount, TraceActive, TraceActiveIndex, I, J
+    integer*2 TraceKind(1:4096), TraceNPoints(1:4096)
+    real*4 TraceAngle(1:4096), TraceX(1:4096,1:151), TraceY(1:4096,1:151)
+    common /TraceData/ TraceCount, TraceActive, TraceActiveIndex, TraceKind, TraceNPoints, TraceAngle, TraceX, TraceY
+
+    CountOut = TraceCount
+    if (CountOut > 4096) CountOut = 4096
+    do I = 1, CountOut
+        KindOut(I-1) = TraceKind(I)
+        NPointsOut(I-1) = TraceNPoints(I)
+        AngleOut(I-1) = TraceAngle(I)
+        do J = 1, TraceNPoints(I)
+            XOut(I-1,J-1) = TraceX(I,J)
+            YOut(I-1,J-1) = TraceY(I,J)
+        end do
+    end do
+end subroutine YTWCore1_GetTrace
+
+
 ! ================================================================================
 ! REFL: Ray Tracing with Fresnel Reflection Coefficients
 ! ================================================================================
@@ -1101,9 +1162,17 @@ subroutine REFL( IptStart, IptEnd, RayAngle0, RayHeight0, FinalPhase, ReflAmp, P
     common /Constants/ PI, TWO_PI, UTD_MAG_THRESHOLD, DEG2RAD, HALF_PI, EARTH_RADIUS_FT
 
     real*4 DG(0:150), HG(0:150), FREQ_MHZ, SOIL_EPSR, SOIL_COND_PARAM, k, LAMBDA_FT, PATTERN_ELEV_NORM60_OVER_BW, ARRAY_PATTERN_SCALE
-    common /Params/ DG, HG, FREQ_MHZ, SOIL_EPSR, SOIL_COND_PARAM, k, LAMBDA_FT, PATTERN_ELEV_NORM60_OVER_BW, ARRAY_PATTERN_SCALE
+    integer*2 POLARIZATION_MODE
+    common /Params/ DG, HG, FREQ_MHZ, SOIL_EPSR, SOIL_COND_PARAM, k, LAMBDA_FT, PATTERN_ELEV_NORM60_OVER_BW, ARRAY_PATTERN_SCALE, POLARIZATION_MODE
+
+    integer*4 TraceCount, TraceActive, TraceActiveIndex
+    integer*2 TraceKind(1:4096), TraceNPoints(1:4096)
+    real*4 TraceAngle(1:4096), TraceX(1:4096,1:151), TraceY(1:4096,1:151)
+    common /TraceData/ TraceCount, TraceActive, TraceActiveIndex, TraceKind, TraceNPoints, TraceAngle, TraceX, TraceY
 
     real*4, external :: ATN4
+
+    integer, parameter :: I2 = selected_int_kind(4)
 
     ! Initialize output parameters before tracing the requested segment range
     ! Defaults represent no completed path until the loop proves otherwise
@@ -1124,6 +1193,7 @@ subroutine REFL( IptStart, IptEnd, RayAngle0, RayHeight0, FinalPhase, ReflAmp, P
             TotSlantFt = SlantSegLen + TotSlantFt  !1108
             PhaseAfterRefl = SlantSegLen * k + PhaseAfterRefl  !1109
             ReflAmp = 1.0  !1110
+            CALL TRACE_ADD(DG(Ipt), RayHeight)
         else
             ! Ray intersects terrain - calculate reflection point geometry
             if (DG(Ipt) - DG(Ipt-1) == 0.0) then  !1113
@@ -1137,6 +1207,8 @@ subroutine REFL( IptStart, IptEnd, RayAngle0, RayHeight0, FinalPhase, ReflAmp, P
             ReflectPointDistFt = AlongSegToIntersect + DG(Ipt-1)  !1121
             TotSlantFt = ReflectPointDistFt + TotSlantFt  !1122
             ReflectPointHeightFt = SegSlope * AlongSegToIntersect + HG(Ipt-1)  !1123
+            CALL TRACE_ADD_KIND(2_I2)
+            CALL TRACE_ADD(ReflectPointDistFt, ReflectPointHeightFt)
             SegmentAngleRad = ATN4(DG(Ipt) - DG(Ipt-1), HG(Ipt) - HG(Ipt-1))  !1124
             RayAngle = SegmentAngleRad * 2.0 - RayAngle  !1126
             if (ABS(RayAngle) >= HALF_PI) then  !1127
@@ -1146,6 +1218,7 @@ subroutine REFL( IptStart, IptEnd, RayAngle0, RayHeight0, FinalPhase, ReflAmp, P
             end if
             SlantSegLen = ((DG(Ipt) - DG(Ipt-1) - AlongSegToIntersect) / COS(RayAngle))  !1132
             RayHeight = (SIN(RayAngle) * SlantSegLen + ReflectPointHeightFt)  !1133
+            CALL TRACE_ADD(DG(Ipt), RayHeight)
             TotSlantFt = SlantSegLen + TotSlantFt  !1134
             PhaseAfterRefl = SlantSegLen * k + PhaseAfterRefl  !1135
             PhaseIn = PhaseAfterRefl  !1137

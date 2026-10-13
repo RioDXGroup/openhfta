@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python3 -c ' *)",
+      "Read(//usr/local/lib/**)",
+      "Bash(python3 -m unittest test_core -v)",
+      "Bash(python3 -m unittest test_hfta test_core test_api -v)",
+      "Bash(git stash *)",
+      "Bash(python3 -m unittest test_api.TestAPI.test_feedback_is_sent_to_configured_mailer test_api.TestAPI.test_feedback_rejects_invalid_email -v)",
+      "Bash(curl -sf http://localhost:8001/health)",
+      "Bash(docker exec *)",
+      "Bash(curl -sf http://localhost:8000/health)",
+      "Bash(curl -sf http://localhost:8000/api/health)",
+      "Bash(curl -s http://localhost:8000/)",
+      "Bash(curl -s -X POST http://localhost:8000/api/analyze -F frequency=14.2 -F heights=10 -F antenna_type=Dipole -F polarization=vertical -F 'profile=@test/pro/PR1T-torre1-332.00.PRO;type=text/plain' -o /tmp/claude-1000/-home-fernando-Documentos-projetos-pessoal-openhfta/87bd8bc7-55f4-4e97-90d5-275d179548c1/scratchpad/vert_resp.json)",
+      "Bash(ssh root@217.216.67.119 \"curl -sf http://localhost:8001/health && echo OK\")"
+    ]
+  }
+}

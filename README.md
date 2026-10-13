@@ -120,6 +120,66 @@ the original HFTA behavior.
 
 ## Usage
 
+### API (`api/`)
+
+Inicie a API em desenvolvimento com:
+
+```bash
+uvicorn api.main:app --reload
+```
+
+O health check está em `GET /health`. O endpoint `POST /api/analyze` recebe
+um perfil `.PRO` via multipart e retorna JSON com `angles_deg`, `pattern_db`,
+configuração efetiva e metadados. A documentação interativa fica em `/docs`.
+
+O projeto web fica em `web/`:
+
+```bash
+cd web
+npm install
+npm run dev
+```
+
+O web inicia por padrão em `http://localhost:5174` e espera a API em
+`http://127.0.0.1:8000`; para outro endereço, use
+`VITE_API_URL` antes de iniciar o Vite.
+
+Ou inicie os dois projetos juntos:
+
+```bash
+./scripts/dev.sh
+```
+
+Para iniciar o web e a API em um único processo persistente:
+
+```bash
+./scripts/start.sh
+```
+
+Depois acesse `http://localhost:8000`. O script compila o web e o
+FastAPI passa a servir a interface e os endpoints no mesmo endereço.
+Se a porta 8000 estiver ocupada, use outra porta: `API_PORT=8001 ./scripts/start.sh`.
+O script escuta em IPv4 e IPv6 para que `http://localhost:8000` funcione nos dois casos.
+
+Para parar depois:
+
+```bash
+./scripts/stop.sh
+```
+
+### Produção com Docker
+
+A implantação de produção usa containers separados para a API e o web, com
+Nginx fazendo o proxy para os endpoints. Consulte [`docker/README.md`](docker/README.md)
+ou execute:
+
+```bash
+docker compose up -d --build
+```
+
+Depois acesse `http://localhost:8000`.
+
+
 The examples below assume `hfta` is installed or available in the active shell.
 For local development from the working tree, use `./hfta.py` in place of
 `hfta`.
@@ -279,6 +339,11 @@ The elevation pattern is computed at 140 angle samples from 0.25° to 35.0° in 
 
 ## Theory and Background
 
+For a project-wide operational and architecture guide, see
+[docs/GUIA_DO_PROJETO.md](docs/GUIA_DO_PROJETO.md). It documents the execution
+flow, CLI options, input formats, testing workflow, ABI boundary, and common
+troubleshooting steps.
+
 For detailed information about the theoretical foundations:
 
 - [docs/THEORY.md](docs/THEORY.md): Comprehensive overview of UTD theory, Fresnel reflection, terrain modeling, and the mathematical foundations underlying the elevation pattern calculations
@@ -309,6 +374,22 @@ Install required packages from your distribution, for example:
 ```bash
 sudo apt install python3-numpy python3-matplotlib
 ```
+
+### Explicação por IA com OpenRouter
+
+O endpoint `/api/ai/explain` usa a API compatível com OpenAI do OpenRouter e
+retorna uma explicação estruturada em português. Copie `.env.example` para
+`.env`, preencha `OPENROUTER_API_KEY` e escolha em `OPENROUTER_MODEL` um modelo
+compatível com JSON Schema.
+
+```bash
+cp .env.example .env
+python3 -m pip install -r api/requirements.txt
+```
+
+O estado da configuração pode ser verificado em `/api/ai/status`. A análise
+determinística continua funcionando sem a chave; somente a explicação por IA
+fica indisponível.
 
 ### Symbol Errors
 

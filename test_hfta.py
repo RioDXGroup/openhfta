@@ -190,6 +190,18 @@ Elev      20m    40m
         aoa_data = hfta.parse_prn_multiband(prn_content, "20m")
         expected = {1: 0.0, 5: 0.05, 10: 0.0}
         self.assertEqual(aoa_data, expected)
+
+    def test_parse_prn_format_band_without_statistics(self):
+        """A band column filled with zeros carries no statistics for that path."""
+        prn_content = """Test Path
+Elev      80m    20m
+ 1        0.0   40.0
+ 5        0.0   60.0
+10        0.0    0.0
+"""
+
+        self.assertEqual(hfta.parse_prn_multiband(prn_content, "80m"), {})
+        self.assertEqual(hfta.parse_prn_multiband(prn_content, "20m"), {1: 0.4, 5: 0.6, 10: 0.0})
     
 class TestFOMComputation(unittest.TestCase):
     """Test Figure of Merit computation."""
@@ -324,6 +336,8 @@ class TestFrequencyParsing(unittest.TestCase):
     def test_parse_frequency_mhz(self):
         """Test parsing frequency in MHz."""
         self.assertAlmostEqual(hfta.parse_frequency("14.2"), 14.2)
+        self.assertAlmostEqual(hfta.parse_frequency("14.20 MHz"), 14.2)
+        self.assertAlmostEqual(hfta.parse_frequency("14,20 MHz"), 14.2)
         self.assertAlmostEqual(hfta.parse_frequency("21.0"), 21.0)
         self.assertAlmostEqual(hfta.parse_frequency("7.15"), 7.15)
     
@@ -352,6 +366,21 @@ class TestFrequencyParsing(unittest.TestCase):
         self.assertEqual(hfta.frequency_to_band(28.5), "10m")
         self.assertEqual(hfta.frequency_to_band(1.85), "160m")
         self.assertIsNone(hfta.frequency_to_band(123.45))  # Not in any ham band
+
+    def test_parse_prn_numeric_frequency_column(self):
+        prn_content = """Test Path
+Elev      7.15 MHz    14.20 MHz    28.50 MHz
+ 1        10.0         20.0         30.0
+"""
+        aoa_data = hfta.parse_prn_multiband(prn_content, "20m")
+        self.assertEqual(aoa_data, {1: 0.2})
+
+    def test_parse_prn_ignores_elevation_stat_label(self):
+        prn_content = """Test Path
+Elev. Stat.  7.15 MHz    14.20 MHz    28.50 MHz
+ 1            10.0         20.0         30.0
+"""
+        self.assertEqual(hfta.parse_prn_multiband(prn_content, "20m"), {1: 0.2})
 
 class TestArgumentValidation(unittest.TestCase):
     """Test validation of analysis arguments."""

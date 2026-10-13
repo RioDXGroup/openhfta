@@ -20,6 +20,8 @@
     (python3.withPackages (p: [
       p.numpy
       p.matplotlib
+      p.fastapi
+      p.uvicorn
     ]))
   ];
   doCheck = true;

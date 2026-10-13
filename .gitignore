@@ -36,3 +36,18 @@ test_*.txt
 # clangd / tooling
 compile_commands.json
 .cache/
+
+# Local secrets
+.env
+.env.*
+!.env.example
+.sessions/
+agent/.sessions/
+
+# Web artifacts and local dependencies
+web/node_modules/
+agent/node_modules/
+web/dist/
+web/*.tsbuildinfo
+web/vite.config.js
+web/vite.config.d.ts

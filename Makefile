@@ -101,6 +101,9 @@ test-core-differential: $(TEST_DIR)/OpenYTWCore.dll $(TEST_DIR)/test_ytw_harness
 test: test-core
 	@echo "Running Python unit tests..."
 	python3 -m unittest test_hfta -v
+	python3 -m unittest test_core -v
+	python3 -m unittest test_api -v
+
 
 # Cleanup
 clean:

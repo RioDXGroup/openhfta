@@ -21,7 +21,7 @@ Important scope notes:
 
 - Pattern type: far-field skywave elevation patterns along one azimuthal terrain cut.
 - Geometry: a 2D terrain profile represented as a piecewise-linear polyline.
-- Polarization: the implemented field calculation uses horizontal polarization. This matches HFTA's intended use with horizontally polarized Yagis, quads, and dipoles; vertical polarization is included here as comparison context for the validation literature.
+- Polarization: the field calculation supports horizontal/TE and vertical/TM ground reflection and the corresponding soft/hard combination of the 2-D UTD coefficient. Horizontal remains the default and matches HFTA's intended use with horizontally polarized Yagis, quads, and dipoles. Vertical mode uses the TM Fresnel coefficient and hard/TM UTD combination; this scalar 2-D specialization still requires validation against external TM references.
 - Surface-wave calculation: outside the skywave pattern model. Ground-wave field strength requires a different propagation formulation.
 - Frequency range: HF, roughly 3-30 MHz, though many formulas are general high-frequency asymptotics.
 - Angle convention: elevation angle is measured from the local horizontal. The Fortran core bins output every 0.25 degree from 0.25 to 35.0 degrees.
@@ -80,7 +80,7 @@ For incidence from air onto lossy ground, with $\theta_i$ measured from the loca
   \frac{\varepsilon_c\cos\theta_i-\sqrt{\varepsilon_c-\sin^2\theta_i}}
        {\varepsilon_c\cos\theta_i+\sqrt{\varepsilon_c-\sin^2\theta_i}}.$$
 
-HFTA and this Fortran core use the horizontal coefficient. Written in terms of a surface grazing angle $\gamma=\pi/2-\theta_i$, the horizontal coefficient is equivalently
+HFTA's traditional mode and the OpenHFTA default use the horizontal coefficient. Written in terms of a surface grazing angle $\gamma=\pi/2-\theta_i$, the horizontal coefficient is equivalently
 
 $$\Gamma_h(\gamma) =
 \frac{\sin\gamma-\sqrt{\varepsilon_c-\cos^2\gamma}}
@@ -185,12 +185,12 @@ and `WD` evaluates its four terms first with `PHR - PhiP` and then with `PHR + P
 
 Kouyoumjian and Pathak treat grazing incidence as a geometric limiting case on a wedge face. For a straight perfectly conducting wedge, grazing occurs at $\phi'=0$ or $\phi'=n\pi$. In that limit the soft scalar coefficient is set to zero, and the hard scalar coefficient receives a factor of $1/2$ because the incident and reflected GO fields merge on the face; the total field traveling along the face is split into incident and reflected halves. For curved screens and curved wedges the situation is stricter: as grazing is approached, one of the boundary distance parameters can tend to zero, transition regions can overlap surface-diffraction regions, and the article switches to far-zone unity-transition or reciprocity arguments depending on the source and field distances.
 
-The Fortran correction is a broader scalar rule applied later in the calculation. `YUTD` first evaluates the four `WD` terms, combines them as `(term1 + term2) - (term3 + term4)`, normalizes the result by the real factor $1/\sqrt{L_{\rm waves}}$, and extracts the magnitude. It then halves that final magnitude whenever the signed value `PhiP <= 10` degrees. Since `PhiP = Slpe1 - Incidence`, the branch covers every negative `PhiP` value along with small positive values. The program therefore implements a one-sided post-sum attenuation band tied to its terrain-angle tuple, while the Kouyoumjian-Pathak grazing prescription is applied to the soft or hard coefficient at the exact wedge-face limits before the scalar coefficient is used.
+The Fortran correction is a broader scalar rule applied later in the calculation. `YUTD` first evaluates the four `WD` terms, combines them as `(term1 + term2) - (term3 + term4)` for horizontal/TE or with `+` for vertical/TM, normalizes the result by the real factor $1/\sqrt{L_{\rm waves}}$, and extracts the magnitude. It then halves that final magnitude whenever the signed value `PhiP <= 10` degrees. Since `PhiP = Slpe1 - Incidence`, the branch covers every negative `PhiP` value along with small positive values. The program therefore implements a one-sided post-sum attenuation band tied to its terrain-angle tuple, while the Kouyoumjian-Pathak grazing prescription is applied to the soft or hard coefficient at the exact wedge-face limits before the scalar coefficient is used.
 
 Consequences for reading the code:
 
 - Kouyoumjian-Pathak's straight-wedge half factor applies to the hard coefficient at $\phi'=0$ or $\phi'=n\pi$; the Fortran half factor applies to the final scalar magnitude after the four terms have already been combined.
-- Kouyoumjian-Pathak distinguishes soft and hard coefficients; the terrain core uses one scalar coefficient for the horizontal HFTA calculation.
+- Kouyoumjian-Pathak distinguishes soft and hard coefficients; the terrain core selects the soft combination for horizontal/TE and the hard combination for vertical/TM within its scalar 2-D specialization.
 - Kouyoumjian-Pathak's curved-edge treatment checks the relevant $kL$, $kL^i$, and $kL^r$ transition arguments; the Fortran rule uses the signed `PhiP <= 10` degree threshold and a single caller-supplied `L_waves`.
 
 `WD` evaluates the scalar coefficient for `n_wedge >= 0.501`. For smaller `n_wedge`, the tangent/cotangent calculation is bypassed and all four terms are set to zero. In terrain terms, vertices whose `Incl` gives a wedge parameter at or below that cutoff contribute no `WD` diffraction field.
@@ -493,7 +493,7 @@ Far from the boundary, $kLa^\pm$ is large and $F(kLa^\pm)\to1$, so the UTD coeff
 
 ### A.5 How the Fortran Specializes Kouyoumjian-Pathak
 
-The full UTD expression is vector/dyadic and distinguishes soft and hard coefficients, incident and reflected boundary distance parameters, and the exact wedge-face grazing cases. The HFTA-style Fortran core specializes that machinery for a 2D horizontal-polarization terrain pattern:
+The full UTD expression is vector/dyadic and distinguishes soft and hard coefficients, incident and reflected boundary distance parameters, and the exact wedge-face grazing cases. The HFTA-style Fortran core specializes that machinery for a 2D terrain pattern and selects the soft or hard combination according to polarization:
 
 - The terrain edge is treated as perpendicular to the profile plane, so the scalar code uses $\sin\beta_0\approx1$.
 - `ANGIN` maps local terrain slopes and incident angle into the tuple `Incl`, `PhiP`, and `PHR`.

@@ -1,0 +1,11 @@
+{
+  "model": "google/gemma-4-26b-a4b-it",
+  "maxSteps": 8,
+  "maxCost": 0.25,
+  "sessionDir": ".sessions",
+  "display": {
+    "toolDisplay": "grouped",
+    "reasoning": false,
+    "inputStyle": "plain"
+  }
+}

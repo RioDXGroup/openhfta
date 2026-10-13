@@ -1,0 +1,9 @@
+fastapi>=0.100
+python-multipart>=0.0.9
+uvicorn[standard]>=0.20
+httpx>=0.27
+numpy>=1.24
+matplotlib>=3.7
+# O SDK OpenAI é usado no modo compatível com a API OpenRouter.
+openai>=1.0
+python-dotenv>=1.0
